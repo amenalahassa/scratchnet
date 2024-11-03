@@ -5,8 +5,17 @@ description = ""
 authors = ["Konrad T. A. ALAHASSA <am.konrad21@gmail.com>"]
 readme = "README.md"
 
+[tool.poetry.scripts]
+validate = "scrachnnet.valid_nnet:main"
+
 [tool.poetry.dependencies]
 python = "^3.10"
+numpy = "^2.1.3"
+pandas = "^2.2.3"
+scikit-learn = "^1.5.2"
+matplotlib = "^3.9.2"
+seaborn = "^0.13.2"
+torch = "^2.5.1"
 
 
 [build-system]

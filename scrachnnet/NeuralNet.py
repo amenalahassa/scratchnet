@@ -9,13 +9,12 @@ se fera en utilisant les méthodes train, predict et evaluate de votre code.
 """
 
 import numpy as np
-
-import helpers
-from classifieur import Classifier
-from helpers import softmax, sigmoid, min_max_scaling, initialize_weights_xavier
+from scrachnnet.classifieur import Classifier
+from scrachnnet.helpers import softmax, sigmoid, min_max_scaling, initialize_weights_xavier
 from sklearn.neural_network import MLPClassifier
 import pandas as pd
 import time
+import torch
 
 
 # le nom de votre classe
@@ -37,45 +36,92 @@ class Layer:
 
         # Initialisation des poids
         self.weights = initialize_weights_xavier(input_size, output_size)
-        self.bias = np.zeros((1, output_size))
+        self.bias = torch.zeros(output_size)
+
+    # def forward(self, x):
+    #     """
+    #     Forward pass à travers la couche.
+    #
+    #     Args:
+    #     x (ndarray): Entrée de la couche de forme (n, input_size).
+    #
+    #     Returns:
+    #     ndarray: Sortie de la couche de forme (n, output_size).
+    #     """
+    #     self.input = x
+    #     self.output = np.dot(x, self.weights) + self.bias
+    #     if self.activation_function:
+    #         self.output = self.activation_function(self.output)
+    #     return self.output
+    #
+    # def backward(self, delta, learning_rate):
+    #     """
+    #     Backpropagation à travers la couche.
+    #
+    #     Args:
+    #     delta (ndarray): Gradient en sortie de la couche de forme (n, output_size).
+    #     learning_rate (float): Taux d'apprentissage.
+    #
+    #     Returns:
+    #     ndarray: Gradient en entrée de la couche de forme (n, input_size).
+    #     """
+    #     if self.activation_function:
+    #         derivative = self.activation_function(self.output, derivative=True)
+    #         delta *= derivative
+    #     grad = np.dot(delta, self.weights.T)
+    #     self.weights -= np.dot(self.input.T, delta) * learning_rate
+    #     self.bias -= np.sum(delta, axis=0) * learning_rate
+    #     return grad
 
     def forward(self, x):
         """
-        Forward pass à travers la couche.
+        Forward pass through the layer.
 
         Args:
-        x (ndarray): Entrée de la couche de forme (n, input_size).
+        x (torch.Tensor): Input to the layer of shape (n, input_size).
 
         Returns:
-        ndarray: Sortie de la couche de forme (n, output_size).
+        torch.Tensor: Output of the layer of shape (n, output_size).
         """
-        self.input = x
-        if not self.activation_function:
-            self.output = np.dot(x, self.weights) + self.bias
-            return self.output
-        self.output = self.activation_function(np.dot(x, self.weights) + self.bias)
+        self.input = x  # Store the input for use in backprop
+        self.output = x @ self.weights + self.bias  # Matrix multiplication for forward pass
+
+        # Apply activation function if provided
+        if self.activation_function:
+            self.output = self.activation_function(self.output)
+
         return self.output
 
     def backward(self, delta, learning_rate):
         """
-        Backpropagation à travers la couche.
+        Backpropagation through the layer.
 
         Args:
-        delta (ndarray): Gradient en sortie de la couche de forme (n, output_size).
-        learning_rate (float): Taux d'apprentissage.
+        delta (torch.Tensor): Gradient at the layer output of shape (n, output_size).
+        learning_rate (float): Learning rate.
 
         Returns:
-        ndarray: Gradient en entrée de la couche de forme (n, input_size).
+        torch.Tensor: Gradient at the layer input of shape (n, input_size).
         """
+        # Apply activation function's derivative if necessary
         if self.activation_function:
             derivative = self.activation_function(self.output, derivative=True)
-            delta *= derivative
-        self.weights += np.dot(self.input.T, delta) * learning_rate
-        self.bias += np.sum(delta, axis=0) * learning_rate
-        return np.dot(delta, self.weights.T)
+            delta = delta * derivative
+
+        # Calculate gradient of the loss with respect to inputs
+        grad_input = delta @ self.weights.T
+
+        # Update weights and biases using gradients
+        self.weights.grad = None  # Clear existing gradients (optional for manual updates)
+        self.bias.grad = None
+
+        self.weights -= (self.input.T @ delta) * learning_rate
+        self.bias -= delta.sum(dim=0) * learning_rate
+
+        return grad_input
 
 class NeuralNet(Classifier):
-    def __init__(self, input_size, hidden_size, output_size, activation_function, output_activation_function, n_layer = 1, dataset=None, **kwargs):
+    def __init__(self, input_size, hidden_size, output_size, activation_function, n_layer = 1, dataset=None, **kwargs):
         """
         C'est un Initializer.
         Vous pouvez passer d'autre paramètres au besoin,
@@ -87,7 +133,6 @@ class NeuralNet(Classifier):
         self.output_size = output_size
         self.n_layer = n_layer
         self.activation_function = activation_function
-        self.output_function = output_activation_function
         self.dataset = dataset
 
         # Initialisation des couches
@@ -130,16 +175,13 @@ class NeuralNet(Classifier):
                 grad = layer.backward(grad, learning_rate)
 
             losses.append(loss)
-            labels.append(train_labels)
+            labels.append(train_labels.numpy())
 
-            # print(output.shape)
-            if self.output_function == sigmoid:
-                output = (output > 0.5).flatten()
+            if self.output_size == 1:
+                output = (output > 0.5).flatten().to(torch.float)
+            else:
+                output = torch.argmax(output, dim=-1)
 
-            if self.output_function == softmax:
-                output = np.argmax(output, axis=-1)
-
-            # print(output.shape, train_labels)
             predicted.append(output)
 
             test_predicted.append(self.predict(test))
@@ -148,6 +190,7 @@ class NeuralNet(Classifier):
         prediction_time = end_time - start_time  # Calculer le temps pris pour la prédiction
 
         return losses, labels, predicted, test_predicted, prediction_time
+
     def predict(self, x):
         """
         Prédire la classe d'un exemple x donné en entrée
@@ -156,11 +199,11 @@ class NeuralNet(Classifier):
         for layer in self.layers:
             x = layer.forward(x)
 
-        if self.output_function == sigmoid:
-            x = (x > 0.5).flatten()
+        if self.output_size == 1:
+            x = (x > 0.5).flatten().to(torch.float)
+        else:
+            x = torch.argmax(x, dim=-1)
 
-        if self.output_function == softmax:
-            x = np.argmax(x, axis=-1)
         return x
 
     def optimal_hidden_size(self, X, y, k = 7, sizes = (10,), learning_rate=1e-2, epoch=100, batch_size=10):
@@ -231,12 +274,101 @@ class NeuralNet(Classifier):
 
         return X_processed.values, y
 
+
+    def as_pytorch(self):
+        """
+        Implémentation du réseau de neurones avec PyTorch.
+        Using the same architecture as the one defined in the NeuralNet class.
+        """
+
+        activation = torch.nn.ReLU
+        if self.activation_function == sigmoid:
+            activation = torch.nn.Sigmoid
+
+        # Define the model
+        # Initiate the weights and biases with NeuralNet's weights and biases
+        model = torch.nn.Sequential()
+        model.add_module("input", torch.nn.Linear(self.input_size, self.hidden_size))
+        model.add_module("activation", activation())
+        for i in range(self.n_layer):
+            model.add_module(f"hidden_{i}", torch.nn.Linear(self.hidden_size, self.hidden_size))
+            model.add_module(f"activation_{i}", activation())
+
+        model.add_module("output", torch.nn.Linear(self.hidden_size, self.output_size))
+
+        # Copy the weights and biases
+        layers = [layer for layer in model if isinstance(layer, torch.nn.Linear)]
+        for i, layer in enumerate(layers):
+            layer.weight.data = self.layers[i].weights.T
+            layer.bias.data = self.layers[i].bias.flatten()
+
+        for param in model.parameters():
+            param.requires_grad = True
+
+        return model
+
+
+    def pytorch_train(self, model, train_data, train_labels, test, loss_function, learning_rate=0.1, epochs=1000):
+        """
+        Training the PyTorch model using PyTorch.
+        """
+        start_time = time.time()
+
+        # Define the optimizer
+        optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+
+        losses = []
+        labels = []
+        predicted = []
+        test_predicted = []
+
+        for epoch in range(epochs):
+            model.train()
+
+            # Forward pass
+            output = model(train_data)
+
+            # Calculate the loss
+            loss, _ = loss_function(output, train_labels)
+
+            # Backward pass
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            losses.append(loss.item())
+            labels.append(train_labels.numpy())
+
+            if self.output_size == 1:
+                output = (output > 0.5).flatten().to(torch.float)
+            else:
+                output = torch.argmax(output, dim=-1)
+
+            predicted.append(output)
+
+            # Predict the test set
+            model.eval()
+            val_predicted = model(test)
+
+            if self.output_size == 1:
+                val_predicted = (val_predicted > 0.5).flatten().to(torch.float)
+            else:
+                val_predicted = torch.argmax(val_predicted, dim=-1)
+
+            test_predicted.append(val_predicted)
+
+        end_time = time.time()
+        prediction_time = end_time - start_time
+
+        return losses, labels, predicted, test_predicted, prediction_time
+
+
     def __str__(self):
         print(f"Architecture du Neural net pour dataset: {self.dataset}")
         print(f"Nombre de feature (Taille de l'entree) : {self.input_size}")
         print(f"Nombre de couche cachee : {self.n_layer}")
         print(f"Taille des couches cachees : {self.hidden_size}")
         print(f"Activation : {self.activation_function.__name__}")
-        print(f"Activation en sortie: {self.output_function.__name__}")
+        print(f"Nombre de classes (Taille de la sortie) : {self.output_size}")
         print("\n\n")
         return ""

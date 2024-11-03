@@ -9,7 +9,7 @@ se fera en utilisant les méthodes train, predict et evaluate de votre code.
 """
 
 import numpy as np
-import helpers
+import scrachnnet.helpers
 import time
 
 

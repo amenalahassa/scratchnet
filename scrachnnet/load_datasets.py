@@ -32,7 +32,7 @@ def load_iris_dataset(train_ratio):
     conversion_labels = {'Iris-setosa': 0, 'Iris-versicolor' : 1, 'Iris-virginica' : 2}
     
     # Le fichier du dataset est dans le dossier datasets en attaché 
-    f = open('datasets/bezdekIris.data', 'r')
+    f = open('scrachnnet/datasets/bezdekIris.data', 'r')
 
     dataset = f.readlines()
     f.close()
@@ -90,7 +90,7 @@ def load_wine_dataset(train_ratio):
     random.seed(1) # Pour avoir les meme nombres aléatoires à chaque initialisation.
 
     # Le fichier du dataset est dans le dossier datasets en attaché 
-    f = open('datasets/binary-winequality-white.csv', 'r')
+    f = open('scrachnnet/datasets/binary-winequality-white.csv', 'r')
 
     dataset = f.readlines()
     f.close()
@@ -145,7 +145,7 @@ def load_abalone_dataset(train_ratio):
         - test_labels : contient les étiquettes pour chaque exemple dans test, de telle sorte
           que : test_labels[i] est l'etiquette pour l'exemple test[i]
     """
-    f = open('datasets/abalone-intervalles.csv', 'r') # La fonction doit retourner 4 matrices (ou vecteurs) de type Numpy.
+    f = open('scrachnnet/datasets/abalone-intervalles.csv', 'r') # La fonction doit retourner 4 matrices (ou vecteurs) de type Numpy.
     dataset = f.readlines()
     f.close()
 

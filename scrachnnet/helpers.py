@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
-from load_datasets import load_iris_dataset, load_wine_dataset, load_abalone_dataset
+from scrachnnet.load_datasets import load_iris_dataset, load_wine_dataset, load_abalone_dataset
 from sklearn.preprocessing import OneHotEncoder
 import matplotlib.pyplot as plt
 import seaborn as sns
+import torch
 
 
 LOADERS = {
@@ -145,7 +146,7 @@ def train_test_split(X, y, test_size=0.25, random_state=None):
     X_train, X_test = X[train_indices], X[test_indices]
     y_train, y_test = y[train_indices], y[test_indices]
 
-    return X_train, X_test, y_train, y_test
+    return torch.tensor(X_train, dtype=torch.float32), torch.tensor(X_test, dtype=torch.float32), torch.tensor(y_train, dtype=torch.float32), torch.tensor(y_test, dtype=torch.float32)
 
 def min_max_scaling(X, min_vals, max_vals):
     X_scaled = (X - min_vals) / (max_vals - min_vals)
@@ -388,52 +389,83 @@ def print_metric_per_class(cm):
         print("F1-score:", f1_score_per_class[i])
         print()
 
+# def initialize_weights_xavier(input_size, output_size):
+#     variance = 1 / (input_size + output_size)
+#     std_dev = np.sqrt(variance)
+#     weights = np.random.normal(0, std_dev, size=(input_size, output_size))
+#     return weights
+
 def initialize_weights_xavier(input_size, output_size):
-    variance = 2 / (input_size + output_size)
-    std_dev = np.sqrt(variance)
-    weights = np.random.normal(0, std_dev, size=(input_size, output_size))
-    return weights
+    variance = 1 / (input_size + output_size)
+    std_dev = torch.sqrt(torch.tensor(variance, dtype=torch.float32))
+    weights = torch.randn(input_size, output_size) * std_dev
+    return weights.to(dtype=torch.float32)
+
+# def binary_cross_entropy_loss(predicted, labels):
+#     epsilon = 1e-15  # Ajout d'un terme epsilon pour éviter les problèmes de log(0)
+#     predicted = predicted > 0.5
+#     predicted = np.clip(predicted, epsilon, 1 - epsilon)  # Clip des valeurs pour éviter log(0)
+#     labels = np.expand_dims(labels, axis=1)
+#     predicted = np.array(predicted, dtype=float)
+#     loss = -np.mean(labels * np.log(predicted) + (1 - labels) * np.log(1 - predicted))
+#     return loss, (predicted - labels)
+#
 
 def binary_cross_entropy_loss(predicted, labels):
-    epsilon = 1e-15  # Ajout d'un terme epsilon pour éviter les problèmes de log(0)
-    predicted = predicted > 0.5
-    predicted = np.clip(predicted, epsilon, 1 - epsilon)  # Clip des valeurs pour éviter log(0)
-    loss = -np.mean(labels * np.log(predicted) + (1 - labels) * np.log(1 - predicted))
-    return loss, sigmoid(sigmoid(predicted), derivative=True) * (np.expand_dims(labels, axis=1) - predicted)
+    epsilon = 1e-15  # To avoid log(0) issues
+
+    predicted = torch.clamp(predicted, epsilon, 1 - epsilon)  # Clamp predictions to avoid log(0)
+
+    # Compute the binary cross-entropy loss manually
+    loss = -torch.mean(labels * torch.log(predicted) + (1 - labels) * torch.log(1 - predicted))
+
+    # Calculate gradients with respect to the loss (difference between predicted and labels)
+    grad = predicted - labels
+
+    return loss, grad
+
+# def categorical_cross_entropy_loss(predicted, labels):
+#     epsilon = 1e-15  # Ajout d'un terme epsilon pour éviter les problèmes de log(0)
+#     predicted = np.clip(predicted, epsilon, 1 - epsilon)  # Clip des valeurs pour éviter log(0)
+#     labels_one_hot = np.eye(predicted.shape[1])[labels]
+#     loss = -np.mean(labels_one_hot * np.log(predicted))
+#     return loss, (predicted - labels_one_hot)
+
 
 def categorical_cross_entropy_loss(predicted, labels):
-    epsilon = 1e-15  # Ajout d'un terme epsilon pour éviter les problèmes de log(0)
-    predicted = np.clip(predicted, epsilon, 1 - epsilon)  # Clip des valeurs pour éviter log(0)
-    labels_one_hot = np.eye(predicted.shape[1])[labels]
+    epsilon = 1e-15  # To avoid log(0) issues
+    predicted = torch.clamp(predicted, epsilon, 1 - epsilon)  # Clamp predictions to avoid log(0)
 
-    loss = -np.mean(labels_one_hot * np.log(predicted))
-    return loss, softmax(predicted, derivative=True, labels=labels) * (predicted - labels_one_hot)
+    # Ensure labels are of type LongTensor for one-hot encoding
+    labels = labels.long()
 
+    # Convert labels to one-hot encoding
+    labels_one_hot = torch.nn.functional.one_hot(labels, num_classes=predicted.shape[1]).float()
 
-# Fonction d'activation sigmoidale
+    # Calculate categorical cross-entropy loss
+    loss = -torch.mean(torch.sum(labels_one_hot * torch.log(predicted), dim=1))
+
+    # Compute the gradient (difference between predicted and labels_one_hot)
+    grad = predicted - labels_one_hot
+
+    return loss, grad
+
+# def sigmoid(x, derivative=False):
+#     if derivative:
+#         return x * (1 - x)
+#     return 1 / (1 + np.exp(-x))
+#
+# def softmax(x, derivative=False):
+#     exp_vals = np.exp(x - np.max(x, axis=1, keepdims=True))
+#     s = exp_vals / np.sum(exp_vals, axis=1, keepdims=True)
+#     return s
+
 def sigmoid(x, derivative=False):
     if derivative:
-        return x * (1 - x)
-    return 1 / (1 + np.exp(-x))
+        return x * (1 - x)  # Assumes x is the sigmoid output
+    return 1 / (1 + torch.exp(-x))
 
-def softmax(x, derivative=False, labels = None):
-    exp_vals = np.exp(x - np.max(x, axis=1, keepdims=True))
-    s = exp_vals / np.sum(exp_vals, axis=1, keepdims=True)
-
-    if derivative:
-        # labels_one_hot = np.eye(x.shape[1])[labels]
-        mask = np.full(s.shape, False)
-        # print(mask[:3], labels[:3])
-        for i, l in enumerate(labels):
-          mask[i, l] = True
-
-        # mask[:, labels] = True
-        # print(mask[:3], labels[:3])
-        #
-        grad = np.copy(s)
-        grad[mask] -= 1
-        # print(mask[:3], grad[:3])
-        return grad
-        # return s * (1 - s)
-    else:
-        return s
+def softmax(x, derivative=False):
+    exp_vals = torch.exp(x - torch.max(x, dim=1, keepdim=True).values)
+    s = exp_vals / torch.sum(exp_vals, dim=1, keepdim=True)
+    return s

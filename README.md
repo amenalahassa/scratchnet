@@ -30,4 +30,3 @@ Ce travail a été réalisé seul.
 ## Difficultés rencontrés
 
 Lors de l'entraînement des modèles avec notre implémentation de l'algorithme Arbre de decision, nous avons rencontré un problème au performances du modele avec la version utilisant l'elagage. Les performances baissent, au lieu d'augmenter.
-Nous avons aussi eu des difficultes a implementer correctement la backprop dans notre version des reseau de neurones, ce qui justifie les faibles performances des modeles.

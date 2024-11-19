@@ -38,41 +38,6 @@ class Layer:
         self.weights = initialize_weights_xavier(input_size, output_size)
         self.bias = torch.zeros(output_size)
 
-    # def forward(self, x):
-    #     """
-    #     Forward pass à travers la couche.
-    #
-    #     Args:
-    #     x (ndarray): Entrée de la couche de forme (n, input_size).
-    #
-    #     Returns:
-    #     ndarray: Sortie de la couche de forme (n, output_size).
-    #     """
-    #     self.input = x
-    #     self.output = np.dot(x, self.weights) + self.bias
-    #     if self.activation_function:
-    #         self.output = self.activation_function(self.output)
-    #     return self.output
-    #
-    # def backward(self, delta, learning_rate):
-    #     """
-    #     Backpropagation à travers la couche.
-    #
-    #     Args:
-    #     delta (ndarray): Gradient en sortie de la couche de forme (n, output_size).
-    #     learning_rate (float): Taux d'apprentissage.
-    #
-    #     Returns:
-    #     ndarray: Gradient en entrée de la couche de forme (n, input_size).
-    #     """
-    #     if self.activation_function:
-    #         derivative = self.activation_function(self.output, derivative=True)
-    #         delta *= derivative
-    #     grad = np.dot(delta, self.weights.T)
-    #     self.weights -= np.dot(self.input.T, delta) * learning_rate
-    #     self.bias -= np.sum(delta, axis=0) * learning_rate
-    #     return grad
-
     def forward(self, x):
         """
         Forward pass through the layer.
@@ -88,7 +53,8 @@ class Layer:
 
         # Apply activation function if provided
         if self.activation_function:
-            self.output = self.activation_function(self.output)
+            self.activation = self.activation_function(self.output)
+            return self.activation
 
         return self.output
 
@@ -115,8 +81,8 @@ class Layer:
         self.weights.grad = None  # Clear existing gradients (optional for manual updates)
         self.bias.grad = None
 
-        self.weights -= (self.input.T @ delta) * learning_rate
-        self.bias -= delta.sum(dim=0) * learning_rate
+        self.weights -= ((self.input.T @ delta) / self.input.shape[0]) * learning_rate
+        self.bias -= (delta.sum(dim=0) / self.input.shape[0]) * learning_rate
 
         return grad_input
 
@@ -134,11 +100,12 @@ class NeuralNet(Classifier):
         self.n_layer = n_layer
         self.activation_function = activation_function
         self.dataset = dataset
+        self.output_activation_function = softmax if output_size > 1 else sigmoid
 
         # Initialisation des couches
         self.layers = [Layer(input_size, hidden_size, activation_function)]
         self.layers.extend([Layer(hidden_size, hidden_size, activation_function) for _ in range(n_layer)])
-        self.layers.append(Layer(hidden_size, output_size))
+        self.layers.append(Layer(hidden_size, output_size, self.output_activation_function))
 
     def train(self, train_data, train_labels, test, loss_function, learning_rate=0.1, epochs=1000):
         """
@@ -168,7 +135,6 @@ class NeuralNet(Classifier):
 
             # Calcul de la perte
             loss, grad = loss_function(output, train_labels)
-            print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss}")
 
             # Backpropagation
             for layer in reversed(self.layers):
@@ -191,13 +157,16 @@ class NeuralNet(Classifier):
 
         return losses, labels, predicted, test_predicted, prediction_time
 
-    def predict(self, x):
+    def predict(self, x, model = None):
         """
         Prédire la classe d'un exemple x donné en entrée
         exemple est de taille 1xm
         """
-        for layer in self.layers:
-            x = layer.forward(x)
+        if model is not None:
+            x = model(x)
+        else:
+            for layer in self.layers:
+                x = layer.forward(x)
 
         if self.output_size == 1:
             x = (x > 0.5).flatten().to(torch.float)
@@ -305,6 +274,7 @@ class NeuralNet(Classifier):
         for param in model.parameters():
             param.requires_grad = True
 
+        model.output_activation_function = self.output_activation_function
         return model
 
 
@@ -327,6 +297,7 @@ class NeuralNet(Classifier):
 
             # Forward pass
             output = model(train_data)
+            output = model.output_activation_function(output)
 
             # Calculate the loss
             loss, _ = loss_function(output, train_labels)

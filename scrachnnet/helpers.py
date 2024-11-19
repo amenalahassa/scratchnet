@@ -389,11 +389,6 @@ def print_metric_per_class(cm):
         print("F1-score:", f1_score_per_class[i])
         print()
 
-# def initialize_weights_xavier(input_size, output_size):
-#     variance = 1 / (input_size + output_size)
-#     std_dev = np.sqrt(variance)
-#     weights = np.random.normal(0, std_dev, size=(input_size, output_size))
-#     return weights
 
 def initialize_weights_xavier(input_size, output_size):
     variance = 1 / (input_size + output_size)
@@ -401,15 +396,6 @@ def initialize_weights_xavier(input_size, output_size):
     weights = torch.randn(input_size, output_size) * std_dev
     return weights.to(dtype=torch.float32)
 
-# def binary_cross_entropy_loss(predicted, labels):
-#     epsilon = 1e-15  # Ajout d'un terme epsilon pour éviter les problèmes de log(0)
-#     predicted = predicted > 0.5
-#     predicted = np.clip(predicted, epsilon, 1 - epsilon)  # Clip des valeurs pour éviter log(0)
-#     labels = np.expand_dims(labels, axis=1)
-#     predicted = np.array(predicted, dtype=float)
-#     loss = -np.mean(labels * np.log(predicted) + (1 - labels) * np.log(1 - predicted))
-#     return loss, (predicted - labels)
-#
 
 def binary_cross_entropy_loss(predicted, labels):
     epsilon = 1e-15  # To avoid log(0) issues
@@ -423,14 +409,6 @@ def binary_cross_entropy_loss(predicted, labels):
     grad = predicted - labels
 
     return loss, grad
-
-# def categorical_cross_entropy_loss(predicted, labels):
-#     epsilon = 1e-15  # Ajout d'un terme epsilon pour éviter les problèmes de log(0)
-#     predicted = np.clip(predicted, epsilon, 1 - epsilon)  # Clip des valeurs pour éviter log(0)
-#     labels_one_hot = np.eye(predicted.shape[1])[labels]
-#     loss = -np.mean(labels_one_hot * np.log(predicted))
-#     return loss, (predicted - labels_one_hot)
-
 
 def categorical_cross_entropy_loss(predicted, labels):
     epsilon = 1e-15  # To avoid log(0) issues
@@ -450,22 +428,16 @@ def categorical_cross_entropy_loss(predicted, labels):
 
     return loss, grad
 
-# def sigmoid(x, derivative=False):
-#     if derivative:
-#         return x * (1 - x)
-#     return 1 / (1 + np.exp(-x))
-#
-# def softmax(x, derivative=False):
-#     exp_vals = np.exp(x - np.max(x, axis=1, keepdims=True))
-#     s = exp_vals / np.sum(exp_vals, axis=1, keepdims=True)
-#     return s
-
 def sigmoid(x, derivative=False):
     if derivative:
         return x * (1 - x)  # Assumes x is the sigmoid output
     return 1 / (1 + torch.exp(-x))
 
 def softmax(x, derivative=False):
+
+    if derivative:
+        return torch.full(x.shape, 1)
+
     exp_vals = torch.exp(x - torch.max(x, dim=1, keepdim=True).values)
     s = exp_vals / torch.sum(exp_vals, dim=1, keepdim=True)
     return s

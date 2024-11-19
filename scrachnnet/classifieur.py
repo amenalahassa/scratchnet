@@ -9,7 +9,7 @@ se fera en utilisant les méthodes train, predict et evaluate de votre code.
 """
 
 import numpy as np
-import scrachnnet.helpers
+import scrachnnet.helpers as helpers
 import time
 
 
@@ -94,7 +94,7 @@ class Classifier: #nom de la class à changer
 
 		return np.mean(errors), errors
 	
-	def evaluate(self, X, y):
+	def evaluate(self, X, y, model=None):
 		"""
 		c'est la méthode qui va evaluer votre modèle sur les données X
 		l'argument X est une matrice de type Numpy et de taille nxm, avec
@@ -107,7 +107,9 @@ class Classifier: #nom de la class à changer
 		les expliquer en commentaire
 		"""
 		start_time = time.time()  # Enregistrer le temps avant la prédiction
-		y_pred = self.predict(X)
+		y_pred = self.predict(X, model)
+		y_pred = y_pred.numpy()
+		y = y.numpy()
 		conf_matrix = helpers.confusion_matrix(y, y_pred)
 		accuracy = helpers.accuracy_score(y, y_pred)
 		precision = helpers.precision_score(y, y_pred, average='macro')
